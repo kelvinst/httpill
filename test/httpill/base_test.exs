@@ -4,26 +4,38 @@ defmodule HTTPillBaseTest do
 
   defmodule Example do
     use HTTPill.Base
-    def process_url(url), do: "http://" <> url
-    def process_request_body(body), do: {:req_body, body}
-    def process_request_options(options), do: Keyword.put(options, :timeout, 10)
-    def process_response_body(body), do: {:resp_body, body}
-    def process_status_code(code), do: {:code, code}
+    def after_process_request(request) do
+      %{request |
+        body: {:req_body, request.body},
+        options: Keyword.put(request.options, :timeout, 10)}
+    end
+    def after_process_response(response) do
+      %{response |
+        body: {:resp_body, response.body},
+        status_code: {:code, response.status_code}}
+    end
   end
 
   defmodule ExampleDefp do
     use HTTPill.Base
-    defp process_url(url), do: "http://" <> url
-    defp process_request_body(body), do: {:req_body, body}
-    defp process_request_options(options), do: Keyword.put(options, :timeout, 10)
-    defp process_response_body(body), do: {:resp_body, body}
-    defp process_status_code(code), do: {:code, code}
+    defp after_process_request(request) do
+      %{request |
+        body: {:req_body, request.body},
+        options: Keyword.put(request.options, :timeout, 10)}
+    end
+    defp after_process_response(response) do
+      %{response |
+        body: {:resp_body, response.body},
+        status_code: {:code, response.status_code}}
+    end
   end
 
   defmodule ExampleParamsOptions do
     use HTTPill.Base
-    def process_url(url), do: "http://" <> url
-    def process_request_params(params), do: Map.merge(params, %{key: "fizz"})
+    def before_process_request(request) do
+      %{request |
+        params: Map.merge(request.params, %{key: "fizz"})}
+    end
   end
 
   setup do
@@ -61,7 +73,8 @@ defmodule HTTPillBaseTest do
   end
 
   test "request body using params example" do
-    expect(:hackney, :request, [{[:get, "http://localhost?foo=bar&key=fizz", [], "", []], {:ok, 200, [], :client}}])
+    expect(:hackney, :request, [{[:get, "http://localhost?foo=bar&key=fizz", [], "", []],
+                                {:ok, 200, [], :client}}])
     expect(:hackney, :body, 1, {:ok, "response"})
 
     assert %HTTPill.Response{

@@ -42,7 +42,7 @@ defmodule HTTPillTest do
   end
 
   test "post charlist body" do
-    assert_response HTTPill.post("localhost:8080/post", 'test')
+    assert_response HTTPill.post("localhost:8080/post", body: 'test')
   end
 
   test "post binary body" do

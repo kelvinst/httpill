@@ -1,25 +1,3 @@
-defmodule HTTPill.Request do
-  defstruct [:body, :method, :params, :url, options: [], headers: []]
-  @type t :: %__MODULE__{
-    body: term,
-    headers: HTTPill.HeaderList.t,
-    method: atom,
-    options: list,
-    params: term,
-    url: binary
-  }
-end
-
-defmodule HTTPill.Response do
-  defstruct [:body, :request, :status_code, headers: []]
-  @type t :: %__MODULE__{
-    body: term,
-    headers: HTTPill.HeaderList.t,
-    request: HTTPill.Request.t,
-    status_code: integer
-  }
-end
-
 defmodule HTTPill.AsyncResponse do
   defstruct id: nil
   @type t :: %__MODULE__{id: reference}
