@@ -1,28 +1,38 @@
 defmodule HTTPill.Base do
   @moduledoc """
-  Provides a default implementation for HTTPill functions.
+  This is the base module for everything you want to do with HTTPill.
 
-  This module is meant to be `use`'d in custom modules in order to wrap the
-  functionalities provided by HTTPill. For example, this is very useful to
-  build API clients around HTTPill:
+  Here are the methods that actually read your config, make the requests, parse
+  the response and handle how this response will be returned.
+
+  ## Creating my own API clients
+
+  You can also `use HTTPill.Base` and customize a lot of functions, creating
+  this way your own API client. The options you give when using will be applied
+  to `HTTPill.Config` as the default configurations for anyone who uses this
+  client.
+
+  Here is an example for you
 
       defmodule GitHub do
-        use HTTPill.Base
+        use HTTPill.Base, base_url: "https://api.github.com"
 
-        @endpoint "https://api.github.com"
-
-        def process_url(url) do
-          @endpoint <> url
+        def after_process_response(resp) do
+          %{resp |
+            body: resp.body
+                  |> Stream.map(fn ({k, v}) ->
+                    {String.to_atom(k), v}
+                  end)
+                  |> Enum.into(%{})}
         end
       end
 
-  The example above shows how the `GitHub` module can wrap HTTPill
-  functionalities to work with the GitHub API in particular; this way, for
-  example, all requests done through the `GitHub` module will be done to the
-  GitHub API:
+  With this module you can make a `GitHub` API calls easily with:
 
       GitHub.get("/users/octocat/orgs")
-      #=> will issue a GET request at https://api.github.com/users/octocat/orgs
+
+  It will make a request to GitHub and return a body with the keys converted to
+  atoms. But be careful with that, since atoms are a limited resource.
 
   ## Overriding functions
 
@@ -32,7 +42,7 @@ defmodule HTTPill.Base do
 
       # Called in order to process the url passed to any request method before
       # actually issuing the request.
-      @spec process_url(binary) :: binary
+      @spec before_process_request(binary) :: binary
       def process_url(url)
 
       # Called to arbitrarily process the request body before sending it with the
