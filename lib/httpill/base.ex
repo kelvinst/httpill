@@ -135,9 +135,9 @@ defmodule HTTPill.Base do
         request = Request.new(method,
                               url,
                               options,
+                              config(),
                               &before_process_request/1,
-                              &after_process_request/1,
-                              config())
+                              &after_process_request/1)
         HTTPill.Base.request(__MODULE__,
                              request,
                              &before_process_response/1,

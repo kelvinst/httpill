@@ -41,11 +41,16 @@ defmodule HTTPillBaseTest do
   defmodule ConfigPill do
     use HTTPill.Base
 
-    Application.put_env(:httpill, __MODULE__, base_url: "config")
+    Application.put_env(:httpill,
+                        __MODULE__,
+                        base_url: "config",
+                        request_headers: [{"Header", "env"}])
   end
 
   defmodule OptPill do
-    use HTTPill.Base, base_url: "opt"
+    use HTTPill.Base,
+      base_url: "opt",
+      request_headers: [{"Header", "opt"}]
   end
 
   setup do
@@ -246,9 +251,9 @@ defmodule HTTPillBaseTest do
     assert validate :hackney
   end
 
-  test "request with base_url as a config" do
+  test "request with config as env" do
     expect(:hackney, :request, [{
-             [:get, "http://config/this", [], "", []],
+             [:get, "http://config/this", [{"Header", "env"}], "", []],
              {:ok, 200, [], :client}
            }])
     expect(:hackney, :body, 1, {:ok, "body"})
@@ -260,9 +265,9 @@ defmodule HTTPillBaseTest do
     } = ConfigPill.get!("this")
   end
 
-  test "request with base_url as an option" do
+  test "request with config as option" do
     expect(:hackney, :request, [{
-             [:get, "http://opt/this", [], "", []],
+             [:get, "http://opt/this", [{"Header", "opt"}], "", []],
              {:ok, 200, [], :client}
            }])
     expect(:hackney, :body, 1, {:ok, "body"})

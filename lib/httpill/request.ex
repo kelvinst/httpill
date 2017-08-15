@@ -32,6 +32,7 @@ defmodule HTTPill.Request do
       `:delete`, etc.)
     - `url` - target url as a binary string or char list
     - `options` - Keyword list of options, see the available options below
+    - `config` - `HTTPill.Config` object with the configurations
     - `before_process` - a function to customize the request before building it
     - `after_process` - a function to customize the request after building it
 
@@ -63,8 +64,8 @@ defmodule HTTPill.Request do
 
   Timeouts can be an integer or `:infinity`
   """
-  @spec new(atom, binary, Keyword.t, function, function, Config.t) :: t
-  def new(method, url, options, before_process, after_process, config) do
+  @spec new(atom, binary, Keyword.t, Config.t, function, function) :: t
+  def new(method, url, options, config, before_process, after_process) do
     Request
     |> struct([
       {:method, method},
@@ -74,7 +75,7 @@ defmodule HTTPill.Request do
     ])
     |> before_process.()
     |> handle_url(config)
-    |> handle_headers()
+    |> handle_headers(config)
     |> handle_body()
     |> after_process.()
   end
@@ -115,12 +116,13 @@ defmodule HTTPill.Request do
     end
   end
 
-  defp handle_headers(%Request{} = request) do
+  defp handle_headers(%Request{} = req, %Config{request_headers: headers}) do
     headers =
-      request.headers
+      req.headers
       |> HeaderList.normalize()
-      |> put_content_type(request.body)
-    %{request | headers: headers}
+      |> put_content_type(req.body)
+      |> (&(headers ++ &1)).()
+    %{req | headers: headers}
   end
 
   defp put_content_type(headers, body) when is_map(body) do
