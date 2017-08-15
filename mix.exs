@@ -34,6 +34,7 @@ defmodule HTTPill.Mixfile do
   defp deps do
     [
 			{:hackney, "~> 1.8"},
+      {:poison, "~> 3.1"},
 
       {:exjsx, "~> 3.1", only: :test},
       {:httparrot, "~> 0.5", only: :test},

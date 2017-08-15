@@ -2,7 +2,7 @@ defmodule HTTPill.Request do
   defstruct [:body, :method, :params, :url, options: [], headers: []]
   @type t :: %__MODULE__{
     body: term,
-    headers: list,
+    headers: HTTPill.HeaderList.t,
     method: atom,
     options: list,
     params: term,
@@ -11,11 +11,11 @@ defmodule HTTPill.Request do
 end
 
 defmodule HTTPill.Response do
-  defstruct [:body, :request_url, :status_code, headers: []]
+  defstruct [:body, :request, :status_code, headers: []]
   @type t :: %__MODULE__{
     body: term,
-    headers: list,
-    request_url: binary,
+    headers: HTTPill.HeaderList.t,
+    request: HTTPill.Request.t,
     status_code: integer
   }
 end

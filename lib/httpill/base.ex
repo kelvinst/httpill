@@ -89,17 +89,16 @@ defmodule HTTPill.Base do
 
   alias HTTPill.AsyncResponse
   alias HTTPill.ConnError
+  alias HTTPill.HeaderList
   alias HTTPill.Request
   alias HTTPill.Response
 
   require Logger
 
-  @type headers :: [{binary, binary}] | %{binary => binary}
   @type body :: binary | {:form, [{atom, any}]} | {:file, binary}
 
   defmacro __using__(_) do
     quote do
-      @type headers :: HTTPill.Base.headers
       @type body :: HTTPill.Base.body
 
       @doc """
@@ -117,10 +116,7 @@ defmodule HTTPill.Base do
       @spec process_response_body(binary) :: any
       def process_response_body(body), do: body
 
-      @spec process_request_headers(headers) ::headers
-      def process_request_headers(headers) when is_map(headers) do
-        Enum.into(headers, [])
-      end
+      @spec process_request_headers(HeaderList.t) :: HeaderList.t
       def process_request_headers(headers), do: headers
 
       def process_request_params(params), do: params
@@ -148,17 +144,11 @@ defmodule HTTPill.Base do
         * `method` - HTTP method as an atom (`:get`, `:head`, `:post`, `:put`,
           `:delete`, etc.)
         * `url` - target url as a binary string or char list
-        * `body` - request body. See more below
-        * `headers` - HTTP headers as an orddict (e.g., `[{"Accept", "application/json"}]`)
         * `options` - Keyword list of options
 
-      Body:
-        * binary, char list or an iolist
-        * `{:form, [{K, V}, ...]}` - send a form url encoded
-        * `{:file, "/path/to/file"}` - send a file
-        * `{:stream, enumerable}` - lazily send a stream of binaries/charlists
-
       Options:
+        * `:body` - request body. See more below
+        * `:headers` - HTTP headers as an orddict (e.g., `[{"Accept", "application/json"}]`)
         * `:params` - an enumerable consisting of two-item tuples that will be appended to the url as query string parameters
         * `:timeout` - timeout to establish a connection, in milliseconds. Default is 8000
         * `:recv_timeout` - timeout used when receiving a connection. Default is 5000
@@ -170,6 +160,13 @@ defmodule HTTPill.Base do
         * `:ssl` - SSL options supported by the `ssl` erlang module
         * `:follow_redirect` - a boolean that causes redirects to be followed
         * `:max_redirect` - an integer denoting the maximum number of redirects to follow
+
+      Body:
+        * binary, char list or an iolist
+        * map, will be converted to json
+        * `{:form, [{K, V}, ...]}` - send a form url encoded
+        * `{:file, "/path/to/file"}` - send a file
+        * `{:stream, enumerable}` - lazily send a stream of binaries/charlists
 
       Timeouts can be an integer or `:infinity`
 
@@ -183,8 +180,8 @@ defmodule HTTPill.Base do
                   headers: [{"Accept", "application/json"}])
 
       """
-      @spec request(atom, binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t}
-        | {:error, ConnError.t}
+      @spec request(atom, binary, Keyword.t) ::
+        {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
       def request(method, url, options \\ []) do
         options = process_request_options(options)
 
@@ -207,14 +204,17 @@ defmodule HTTPill.Base do
           url
           |> to_string()
           |> process_url()
-        body =
-          options
-          |> Keyword.get(:body, "")
-          |> process_request_body()
+        original_body = Keyword.get(options, :body, "")
         headers =
           options
           |> Keyword.get(:headers, [])
+          |> HeaderList.normalize()
+          |> put_content_type(original_body)
           |> process_request_headers()
+        body =
+          original_body
+          |> encode_request_body(HeaderList.get(headers, "Content-Type"))
+          |> process_request_body()
         HTTPill.Base.request(__MODULE__,
                              %Request{
                                options: options,
@@ -227,6 +227,30 @@ defmodule HTTPill.Base do
                              &process_status_code/1,
                              &process_headers/1,
                              &process_response_body/1)
+      end
+
+      defp put_content_type(headers, body) when is_map(body) do
+        HeaderList.put(headers, "Content-Type", "application/json; charset=UTF-8")
+      end
+      defp put_content_type(headers, _) do
+        headers
+      end
+
+      defp encode_request_body(body, nil) do
+        body
+      end
+      defp encode_request_body(body, content_type) when is_map(body) do
+        if String.contains?(content_type, "json") do
+          case Poison.encode(body) do
+            {:ok, json} -> json
+            {:error, _} -> body
+          end
+        else
+          body
+        end
+      end
+      defp encode_request_body(body, _content_type) do
+        body
       end
 
       @doc """
@@ -500,10 +524,10 @@ defmodule HTTPill.Base do
 
     result = case do_request(request, hn_options) do
       {:ok, status_code, headers} ->
-        response(process_status_code, process_headers, process_body, status_code, headers, "", request.url)
+        response(process_status_code, process_headers, process_body, status_code, headers, "", request)
       {:ok, status_code, headers, client} ->
         case :hackney.body(client) do
-          {:ok, body} -> response(process_status_code, process_headers, process_body, status_code, headers, body, request.url)
+          {:ok, body} -> response(process_status_code, process_headers, process_body, status_code, headers, body, request)
           {:error, reason} -> {:error, %ConnError{reason: reason} }
         end
       {:ok, id} -> { :ok, %HTTPill.AsyncResponse{ id: id } }
@@ -549,12 +573,30 @@ defmodule HTTPill.Base do
                      hn_options)
   end
 
-  defp response(process_status_code, process_headers, process_response_body, status_code, headers, body, request_url) do
+  defp decode_response_body(body, nil) do
+    body
+  end
+  defp decode_response_body(body, accepts) do
+    if String.contains?(accepts, "json") do
+      case Poison.decode(body) do
+        {:ok, json} -> json
+        {:error, _} -> body
+      end
+    else
+      body
+    end
+  end
+
+  defp response(process_status_code, process_headers, process_response_body, status_code, headers, body, request) do
+    body =
+      body
+      |> decode_response_body(HeaderList.get(request.headers, "Accepts"))
+      |> process_response_body.()
     {:ok, %Response{
       status_code: process_status_code.(status_code),
       headers: process_headers.(headers),
-      body: process_response_body.(body),
-      request_url: request_url
+      body: body,
+      request: request
     }}
   end
 end
