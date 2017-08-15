@@ -1,11 +1,24 @@
 defmodule HTTPill.Request do
-  defstruct [:body, :url, adapter_options: [], headers: []]
-  @type t :: %__MODULE__{status_code: integer, body: term, headers: list}
+  defstruct [:body, :method, :url, :started_at, adapter_options: [], headers: []]
+  @type t :: %__MODULE__{
+    adapter_options: list,
+    body: term,
+    headers: list,
+    method: atom,
+    started_at: integer,
+    url: binary
+  }
 end
 
 defmodule HTTPill.Response do
-  defstruct status_code: nil, body: nil, headers: [], request_url: nil
-  @type t :: %__MODULE__{status_code: integer, body: term, headers: list}
+  defstruct [:body, :received_at, :request_url, :status_code, headers: []]
+  @type t :: %__MODULE__{
+    body: term,
+    headers: list,
+    received_at: integer,
+    request_url: binary,
+    status_code: integer
+  }
 end
 
 defmodule HTTPill.AsyncResponse do

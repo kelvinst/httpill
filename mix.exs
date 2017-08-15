@@ -33,6 +33,12 @@ defmodule HTTPill.Mixfile do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+			{:hackney, "~> 1.8"},
+
+      {:exjsx, "~> 3.1", only: :test},
+      {:httparrot, "~> 0.5", only: :test},
+      {:meck, "~> 0.8.2", only: :test},
+
       {:ex_doc, ">= 0.0.0", only: :dev},
     ]
   end
