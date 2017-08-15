@@ -55,6 +55,11 @@ defmodule HTTPill.Base do
       @spec process_request_headers(term) :: [{binary, term}]
       def process_request_headers(headers)
 
+      # Called to arbitrarily process the request params before sending them
+      # with the request.
+      @spec process_request_params(map) :: map
+      def process_request_params(params)
+
       # Called to arbitrarily process the request options before sending them
       # with the request.
       @spec process_request_options(keyword) :: keyword
@@ -82,9 +87,10 @@ defmodule HTTPill.Base do
 
   """
 
-  alias HTTPill.Response
   alias HTTPill.AsyncResponse
   alias HTTPill.ConnError
+  alias HTTPill.Request
+  alias HTTPill.Response
 
   @type headers :: [{binary, binary}] | %{binary => binary}
   @type body :: binary | {:form, [{atom, any}]} | {:file, binary}
@@ -114,6 +120,8 @@ defmodule HTTPill.Base do
         Enum.into(headers, [])
       end
       def process_request_headers(headers), do: headers
+
+      def process_request_params(params), do: params
 
       def process_request_options(options), do: options
 
@@ -149,6 +157,7 @@ defmodule HTTPill.Base do
         * `{:stream, enumerable}` - lazily send a stream of binaries/charlists
 
       Options:
+        * `:params` - an enumerable consisting of two-item tuples that will be appended to the url as query string parameters
         * `:timeout` - timeout to establish a connection, in milliseconds. Default is 8000
         * `:recv_timeout` - timeout used when receiving a connection. Default is 5000
         * `:stream_to` - a PID to stream the response to
@@ -159,7 +168,6 @@ defmodule HTTPill.Base do
         * `:ssl` - SSL options supported by the `ssl` erlang module
         * `:follow_redirect` - a boolean that causes redirects to be followed
         * `:max_redirect` - an integer denoting the maximum number of redirects to follow
-        * `:params` - an enumerable consisting of two-item tuples that will be appended to the url as query string parameters
 
       Timeouts can be an integer or `:infinity`
 
@@ -168,38 +176,72 @@ defmodule HTTPill.Base do
 
       ## Examples
 
-          request(:post, "https://my.website.com", "{\"foo\": 3}", [{"Accept", "application/json"}])
+          request(:post, "https://my.website.com",
+                  body: "{\"foo\": 3}",
+                  headers: [{"Accept", "application/json"}])
 
       """
-      @spec request(atom, binary, any, headers, Keyword.t) :: {:ok, Response.t | AsyncResponse.t}
+      @spec request(atom, binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t}
         | {:error, ConnError.t}
-      def request(method, url, body \\ "", headers \\ [], options \\ []) do
+      def request(method, url, options \\ []) do
         options = process_request_options(options)
+
+        params =
+          options
+          |> Keyword.get(:params, nil)
+          |> process_request_params()
+
         url =
           cond do
-            not Keyword.has_key?(options, :params) -> url
-            URI.parse(url).query                   -> url <> "&" <> URI.encode_query(options[:params])
-            true                                   -> url <> "?" <> URI.encode_query(options[:params])
+            !params ->
+              url
+            URI.parse(url).query ->
+              url <> "&" <> URI.encode_query(params)
+            true ->
+              url <> "?" <> URI.encode_query(params)
           end
-        url = process_url(to_string(url))
-        body = process_request_body(body)
-        headers = process_request_headers(headers)
-        HTTPill.Base.request(__MODULE__, method, url, body, headers, options, &process_status_code/1, &process_headers/1, &process_response_body/1)
+
+        url =
+          url
+          |> to_string()
+          |> process_url()
+        body =
+          options
+          |> Keyword.get(:body, "")
+          |> process_request_body()
+        headers =
+          options
+          |> Keyword.get(:headers, [])
+          |> process_request_headers()
+        HTTPill.Base.request(__MODULE__,
+                             %Request{
+                               options: options,
+                               body: body,
+                               headers: headers,
+                               method: method,
+                               params: params,
+                               url: url
+                             },
+                             &process_status_code/1,
+                             &process_headers/1,
+                             &process_response_body/1)
       end
 
       @doc """
       Issues an HTTP request with the given method to the given url, raising an
       exception in case of failure.
 
-      `request!/5` works exactly like `request/5` but it returns just the
+      `request!/3` works exactly like `request/3` but it returns just the
       response in case of a successful request, raising an exception in case the
       request fails.
       """
-      @spec request!(atom, binary, any, headers, Keyword.t) :: Response.t
-      def request!(method, url, body \\ "", headers \\ [], options \\ []) do
-        case request(method, url, body, headers, options) do
-          {:ok, response} -> response
-          {:error, %ConnError{reason: reason}} -> raise ConnError, reason: reason
+      @spec request!(atom, binary, Keyword.t) :: Response.t
+      def request!(method, url, options \\ []) do
+        case request(method, url, options) do
+          {:ok, response} ->
+            response
+          {:error, %ConnError{reason: reason}} ->
+            raise ConnError, reason: reason
         end
       end
 
@@ -209,10 +251,10 @@ defmodule HTTPill.Base do
       Returns `{:ok, response}` if the request is successful, `{:error, reason}`
       otherwise.
 
-      See `request/5` for more detailed information.
+      See `request/3` for more detailed information.
       """
-      @spec get(binary, headers, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
-      def get(url, headers \\ [], options \\ []),          do: request(:get, url, "", headers, options)
+      @spec get(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      def get(url, options \\ []), do: request(:get, url, options)
 
       @doc """
       Issues a GET request to the given url, raising an exception in case of
@@ -220,10 +262,10 @@ defmodule HTTPill.Base do
 
       If the request does not fail, the response is returned.
 
-      See `request!/5` for more detailed information.
+      See `request!/3` for more detailed information.
       """
-      @spec get!(binary, headers, Keyword.t) :: Response.t | AsyncResponse.t
-      def get!(url, headers \\ [], options \\ []),         do: request!(:get, url, "", headers, options)
+      @spec get!(binary, Keyword.t) :: Response.t | AsyncResponse.t
+      def get!(url, options \\ []), do: request!(:get, url, options)
 
       @doc """
       Issues a PUT request to the given url.
@@ -231,10 +273,10 @@ defmodule HTTPill.Base do
       Returns `{:ok, response}` if the request is successful, `{:error, reason}`
       otherwise.
 
-      See `request/5` for more detailed information.
+      See `request/3` for more detailed information.
       """
-      @spec put(binary, any, headers, Keyword.t) :: {:ok, Response.t | AsyncResponse.t } | {:error, ConnError.t}
-      def put(url, body \\ "", headers \\ [], options \\ []),    do: request(:put, url, body, headers, options)
+      @spec put(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t } | {:error, ConnError.t}
+      def put(url, options \\ []), do: request(:put, url, options)
 
       @doc """
       Issues a PUT request to the given url, raising an exception in case of
@@ -242,10 +284,10 @@ defmodule HTTPill.Base do
 
       If the request does not fail, the response is returned.
 
-      See `request!/5` for more detailed information.
+      See `request!/3` for more detailed information.
       """
-      @spec put!(binary, any, Keyword.t) :: Response.t | AsyncResponse.t
-      def put!(url, body \\ "", headers \\ [], options \\ []),   do: request!(:put, url, body, headers, options)
+      @spec put!(binary, Keyword.t) :: Response.t | AsyncResponse.t
+      def put!(url, options \\ []), do: request!(:put, url, options)
 
       @doc """
       Issues a HEAD request to the given url.
@@ -253,10 +295,10 @@ defmodule HTTPill.Base do
       Returns `{:ok, response}` if the request is successful, `{:error, reason}`
       otherwise.
 
-      See `request/5` for more detailed information.
+      See `request/3` for more detailed information.
       """
-      @spec head(binary, headers, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
-      def head(url, headers \\ [], options \\ []),         do: request(:head, url, "", headers, options)
+      @spec head(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      def head(url, options \\ []), do: request(:head, url, options)
 
       @doc """
       Issues a HEAD request to the given url, raising an exception in case of
@@ -264,10 +306,10 @@ defmodule HTTPill.Base do
 
       If the request does not fail, the response is returned.
 
-      See `request!/5` for more detailed information.
+      See `request!/3` for more detailed information.
       """
-      @spec head!(binary, headers, Keyword.t) :: Response.t | AsyncResponse.t
-      def head!(url, headers \\ [], options \\ []),        do: request!(:head, url, "", headers, options)
+      @spec head!(binary, Keyword.t) :: Response.t | AsyncResponse.t
+      def head!(url, options \\ []), do: request!(:head, url, options)
 
       @doc """
       Issues a POST request to the given url.
@@ -275,10 +317,10 @@ defmodule HTTPill.Base do
       Returns `{:ok, response}` if the request is successful, `{:error, reason}`
       otherwise.
 
-      See `request/5` for more detailed information.
+      See `request/3` for more detailed information.
       """
-      @spec post(binary, any, headers, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
-      def post(url, body, headers \\ [], options \\ []),   do: request(:post, url, body, headers, options)
+      @spec post(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      def post(url, options \\ []), do: request(:post, url, options)
 
       @doc """
       Issues a POST request to the given url, raising an exception in case of
@@ -286,10 +328,10 @@ defmodule HTTPill.Base do
 
       If the request does not fail, the response is returned.
 
-      See `request!/5` for more detailed information.
+      See `request!/3` for more detailed information.
       """
-      @spec post!(binary, any, headers, Keyword.t) :: Response.t | AsyncResponse.t
-      def post!(url, body, headers \\ [], options \\ []),  do: request!(:post, url, body, headers, options)
+      @spec post!(binary, Keyword.t) :: Response.t | AsyncResponse.t
+      def post!(url, options \\ []), do: request!(:post, url, options)
 
       @doc """
       Issues a PATCH request to the given url.
@@ -297,10 +339,10 @@ defmodule HTTPill.Base do
       Returns `{:ok, response}` if the request is successful, `{:error, reason}`
       otherwise.
 
-      See `request/5` for more detailed information.
+      See `request/3` for more detailed information.
       """
-      @spec patch(binary, any, headers, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
-      def patch(url, body, headers \\ [], options \\ []),  do: request(:patch, url, body, headers, options)
+      @spec patch(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      def patch(url, options \\ []), do: request(:patch, url, options)
 
       @doc """
       Issues a PATCH request to the given url, raising an exception in case of
@@ -308,10 +350,10 @@ defmodule HTTPill.Base do
 
       If the request does not fail, the response is returned.
 
-      See `request!/5` for more detailed information.
+      See `request!/3` for more detailed information.
       """
-      @spec patch!(binary, any, headers, Keyword.t) :: Response.t | AsyncResponse.t
-      def patch!(url, body, headers \\ [], options \\ []), do: request!(:patch, url, body, headers, options)
+      @spec patch!(binary, Keyword.t) :: Response.t | AsyncResponse.t
+      def patch!(url, options \\ []), do: request!(:patch, url, options)
 
       @doc """
       Issues a DELETE request to the given url.
@@ -319,10 +361,10 @@ defmodule HTTPill.Base do
       Returns `{:ok, response}` if the request is successful, `{:error, reason}`
       otherwise.
 
-      See `request/5` for more detailed information.
+      See `request/3` for more detailed information.
       """
-      @spec delete(binary, headers, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
-      def delete(url, headers \\ [], options \\ []),       do: request(:delete, url, "", headers, options)
+      @spec delete(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      def delete(url, options \\ []), do: request(:delete, url, options)
 
       @doc """
       Issues a DELETE request to the given url, raising an exception in case of
@@ -330,10 +372,10 @@ defmodule HTTPill.Base do
 
       If the request does not fail, the response is returned.
 
-      See `request!/5` for more detailed information.
+      See `request!/3` for more detailed information.
       """
-      @spec delete!(binary, headers, Keyword.t) :: Response.t | AsyncResponse.t
-      def delete!(url, headers \\ [], options \\ []),      do: request!(:delete, url, "", headers, options)
+      @spec delete!(binary, Keyword.t) :: Response.t | AsyncResponse.t
+      def delete!(url, options \\ []), do: request!(:delete, url, options)
 
       @doc """
       Issues an OPTIONS request to the given url.
@@ -341,10 +383,10 @@ defmodule HTTPill.Base do
       Returns `{:ok, response}` if the request is successful, `{:error, reason}`
       otherwise.
 
-      See `request/5` for more detailed information.
+      See `request/3` for more detailed information.
       """
-      @spec options(binary, headers, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
-      def options(url, headers \\ [], options \\ []),      do: request(:options, url, "", headers, options)
+      @spec options(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      def options(url, options \\ []), do: request(:options, url, options)
 
       @doc """
       Issues a OPTIONS request to the given url, raising an exception in case of
@@ -352,15 +394,16 @@ defmodule HTTPill.Base do
 
       If the request does not fail, the response is returned.
 
-      See `request!/5` for more detailed information.
+      See `request!/3` for more detailed information.
       """
-      @spec options!(binary, headers, Keyword.t) :: Response.t | AsyncResponse.t
-      def options!(url, headers \\ [], options \\ []),     do: request!(:options, url, "", headers, options)
+      @spec options!(binary, Keyword.t) :: Response.t | AsyncResponse.t
+      def options!(url, options \\ []), do: request!(:options, url, options)
 
       @doc """
-      Requests the next message to be streamed for a given `HTTPill.AsyncResponse`.
+      Requests the next message to be streamed for a given
+      `HTTPill.AsyncResponse`.
 
-      See `request!/5` for more detailed information.
+      See `request!/3` for more detailed information.
       """
       @spec stream_next(AsyncResponse.t) :: {:ok, AsyncResponse.t} | {:error, ConnError.t}
       def stream_next(resp = %AsyncResponse{ id: id }) do
@@ -369,7 +412,6 @@ defmodule HTTPill.Base do
           err -> {:error, %ConnError{reason: "stream_next/1 failed", id: id}}
         end
       end
-
 
       defoverridable Module.definitions_in(__MODULE__)
     end
@@ -442,25 +484,30 @@ defmodule HTTPill.Base do
   end
 
   @doc false
-  @spec request(atom, atom, binary, body, headers, any, fun, fun, fun) :: {:ok, Response.t} | {:error, ConnError.t}
-  def request(module, method, request_url, request_body, request_headers, options, process_status_code, process_headers, process_response_body) do
-    hn_options = build_hackney_options(module, options)
+  @spec request(atom, Request.t, fun, fun, fun) ::
+    {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+  def request(module, request, process_status_code, process_headers, process_body) do
+    hn_options = build_hackney_options(module, request.options)
 
-    case do_request(method, request_url, request_headers, request_body, hn_options) do
-      {:ok, status_code, headers} -> response(process_status_code, process_headers, process_response_body, status_code, headers, "", request_url)
+    case do_request(request, hn_options) do
+      {:ok, status_code, headers} ->
+        response(process_status_code, process_headers, process_body, status_code, headers, "", request.url)
       {:ok, status_code, headers, client} ->
         case :hackney.body(client) do
-          {:ok, body} -> response(process_status_code, process_headers, process_response_body, status_code, headers, body, request_url)
+          {:ok, body} -> response(process_status_code, process_headers, process_body, status_code, headers, body, request.url)
           {:error, reason} -> {:error, %ConnError{reason: reason} }
         end
       {:ok, id} -> { :ok, %HTTPill.AsyncResponse{ id: id } }
       {:error, reason} -> {:error, %ConnError{reason: reason}}
-     end
+    end
   end
 
-  defp do_request(method, request_url, request_headers, {:stream, enumerable}, hn_options) do
-    with {:ok, ref} <- :hackney.request(method, request_url, request_headers, :stream, hn_options) do
-
+  defp do_request(%Request{body: {:stream, enumerable}} = request, hn_options) do
+    with {:ok, ref} <- :hackney.request(request.method,
+                                        request.url,
+                                        request.headers,
+                                        :stream,
+                                        hn_options) do
       failures = Stream.transform(enumerable, :ok, fn
         _, :error -> {:halt, :error}
         bin, :ok  -> {[], :hackney.send_body(ref, bin)}
@@ -476,18 +523,21 @@ defmodule HTTPill.Base do
     end
   end
 
-  defp do_request(method, request_url, request_headers, request_body, hn_options) do
-    :hackney.request(method, request_url, request_headers,
-                          request_body, hn_options)
+  defp do_request(request, hn_options) do
+    :hackney.request(request.method,
+                     request.url,
+                     request.headers,
+                     request.body,
+                     hn_options)
   end
 
   defp response(process_status_code, process_headers, process_response_body, status_code, headers, body, request_url) do
-    {:ok, %Response {
+    {:ok, %Response{
       status_code: process_status_code.(status_code),
       headers: process_headers.(headers),
       body: process_response_body.(body),
       request_url: request_url
-    } }
+    }}
   end
 end
 

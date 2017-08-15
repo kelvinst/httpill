@@ -27,7 +27,7 @@ defmodule HTTPillBaseTest do
   defmodule ExampleParamsOptions do
     use HTTPill.Base
     def process_url(url), do: "http://" <> url
-    def process_request_options(options), do: Keyword.merge(options, [params: Map.merge(options[:params], %{key: "fizz"})])
+    def process_request_params(params), do: Map.merge(params, %{key: "fizz"})
   end
 
   setup do
@@ -41,7 +41,7 @@ defmodule HTTPillBaseTest do
                                  {:ok, 200, "headers", :client}}])
     expect(:hackney, :body, 1, {:ok, "response"})
 
-    assert Example.post!("localhost", "body") ==
+    assert Example.post!("localhost", body: "body") ==
     %HTTPill.Response{ status_code: {:code, 200},
                          headers: {:headers, "headers"},
                          body: {:resp_body, "response"},
@@ -55,7 +55,7 @@ defmodule HTTPillBaseTest do
                                  {:ok, 200, "headers", :client}}])
     expect(:hackney, :body, 1, {:ok, "response"})
 
-    assert ExampleDefp.post!("localhost", "body") ==
+    assert ExampleDefp.post!("localhost", body: "body") ==
     %HTTPill.Response{ status_code: {:code, 200},
                          headers: {:headers, "headers"},
                          body: {:resp_body, "response"},
@@ -68,11 +68,11 @@ defmodule HTTPillBaseTest do
     expect(:hackney, :request, [{[:get, "http://localhost?foo=bar&key=fizz", [], "", []], {:ok, 200, "headers", :client}}])
     expect(:hackney, :body, 1, {:ok, "response"})
 
-    assert ExampleParamsOptions.get!("localhost", [], params: %{foo: "bar"}) ==
-    %HTTPill.Response{ status_code: 200,
-                         headers: "headers",
-                         body: "response",
-                         request_url: "http://localhost?foo=bar&key=fizz" }
+    assert ExampleParamsOptions.get!("localhost", params: %{foo: "bar"}) ==
+      %HTTPill.Response{status_code: 200,
+                        headers: "headers",
+                        body: "response",
+                        request_url: "http://localhost?foo=bar&key=fizz" }
 
     assert validate :hackney
   end
@@ -95,11 +95,13 @@ defmodule HTTPillBaseTest do
                                  {:ok, 200, "headers", :client}}])
     expect(:hackney, :body, 1, {:ok, "response"})
 
-    assert HTTPill.post!("localhost", "body", [], timeout: 12345) ==
-    %HTTPill.Response{ status_code: 200,
-                         headers: "headers",
-                         body: "response",
-                         request_url: "http://localhost" }
+    assert HTTPill.post!("localhost",
+                         body: "body",
+                         timeout: 12345) ==
+      %HTTPill.Response{status_code: 200,
+                        headers: "headers",
+                        body: "response",
+                        request_url: "http://localhost" }
 
     assert validate :hackney
   end
@@ -109,11 +111,13 @@ defmodule HTTPillBaseTest do
                                  {:ok, 200, "headers", :client}}])
     expect(:hackney, :body, 1, {:ok, "response"})
 
-    assert HTTPill.post!("localhost", "body", [], recv_timeout: 12345) ==
-    %HTTPill.Response{ status_code: 200,
-                         headers: "headers",
-                         body: "response",
-                         request_url: "http://localhost" }
+    assert HTTPill.post!("localhost",
+                         body: "body",
+                         recv_timeout: 12345) ==
+      %HTTPill.Response{status_code: 200,
+                        headers: "headers",
+                        body: "response",
+                        request_url: "http://localhost" }
 
     assert validate :hackney
   end
@@ -123,11 +127,13 @@ defmodule HTTPillBaseTest do
                                  {:ok, 200, "headers", :client}}])
     expect(:hackney, :body, 1, {:ok, "response"})
 
-    assert HTTPill.post!("localhost", "body", [], proxy: "proxy") ==
-    %HTTPill.Response{ status_code: 200,
-                         headers: "headers",
-                         body: "response",
-                         request_url: "http://localhost" }
+    assert HTTPill.post!("localhost",
+                         body: "body",
+                         proxy: "proxy") ==
+      %HTTPill.Response{status_code: 200,
+        headers: "headers",
+        body: "response",
+        request_url: "http://localhost"}
 
     assert validate :hackney
   end
@@ -137,11 +143,14 @@ defmodule HTTPillBaseTest do
                                  {:ok, 200, "headers", :client}}])
     expect(:hackney, :body, 1, {:ok, "response"})
 
-    assert HTTPill.post!("localhost", "body", [], [proxy: "proxy", proxy_auth: {"username", "password"}]) ==
-    %HTTPill.Response{ status_code: 200,
-                         headers: "headers",
-                         body: "response",
-                         request_url: "http://localhost" }
+    assert HTTPill.post!("localhost",
+                         body: "body",
+                         proxy: "proxy",
+                         proxy_auth: {"username", "password"}) ==
+      %HTTPill.Response{status_code: 200,
+                        headers: "headers",
+                        body: "response",
+                        request_url: "http://localhost"}
 
     assert validate :hackney
   end
@@ -151,7 +160,9 @@ defmodule HTTPillBaseTest do
                                  {:ok, 200, "headers", :client}}])
     expect(:hackney, :body, 1, {:ok, "response"})
 
-    assert HTTPill.post!("localhost", "body", [], ssl: [certfile: "certs/client.crt"]) ==
+    assert HTTPill.post!("localhost",
+                         body: "body",
+                         ssl: [certfile: "certs/client.crt"]) ==
     %HTTPill.Response{ status_code: 200,
                          headers: "headers",
                          body: "response",
@@ -165,11 +176,13 @@ defmodule HTTPillBaseTest do
                                  {:ok, 200, "headers", :client}}])
     expect(:hackney, :body, 1, {:ok, "response"})
 
-    assert HTTPill.post!("localhost", "body", [], follow_redirect: true) ==
-    %HTTPill.Response{ status_code: 200,
-                         headers: "headers",
-                         body: "response",
-                         request_url: "http://localhost" }
+    assert HTTPill.post!("localhost",
+                         body: "body",
+                         follow_redirect: true) ==
+    %HTTPill.Response{status_code: 200,
+                      headers: "headers",
+                      body: "response",
+                      request_url: "http://localhost" }
 
     assert validate :hackney
   end
@@ -179,11 +192,13 @@ defmodule HTTPillBaseTest do
                                  {:ok, 200, "headers", :client}}])
     expect(:hackney, :body, 1, {:ok, "response"})
 
-    assert HTTPill.post!("localhost", "body", [], max_redirect: 2) ==
-    %HTTPill.Response{ status_code: 200,
-                         headers: "headers",
-                         body: "response",
-                         request_url: "http://localhost" }
+    assert HTTPill.post!("localhost",
+                         body: "body",
+                         max_redirect: 2) ==
+      %HTTPill.Response{status_code: 200,
+                        headers: "headers",
+                        body: "response",
+                        request_url: "http://localhost" }
 
     assert validate :hackney
   end

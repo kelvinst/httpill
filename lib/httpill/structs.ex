@@ -1,10 +1,11 @@
 defmodule HTTPill.Request do
-  defstruct [:body, :method, :url, :started_at, adapter_options: [], headers: []]
+  defstruct [:body, :method, :params, :started_at, :url, options: [], headers: []]
   @type t :: %__MODULE__{
-    adapter_options: list,
     body: term,
     headers: list,
     method: atom,
+    options: list,
+    params: map,
     started_at: integer,
     url: binary
   }

@@ -14,7 +14,7 @@ defmodule HTTPillTest do
   end
 
   test "get with params" do
-    resp = HTTPill.get("localhost:8080/get", [], params: %{foo: "bar", baz: "bong"})
+    resp = HTTPill.get("localhost:8080/get", params: %{foo: "bar", baz: "bong"})
     assert_response resp, fn(response) ->
       args = JSX.decode!(response.body)["args"]
       assert args["foo"] == "bar"
@@ -24,7 +24,8 @@ defmodule HTTPillTest do
   end
 
   test "get with params in url and options" do
-    resp = HTTPill.get("localhost:8080/get?bar=zing&foo=first", [], params: [{"foo", "second"}, {"baz", "bong"}])
+    resp = HTTPill.get("localhost:8080/get?bar=zing&foo=first",
+                       params: [{"foo", "second"}, {"baz", "bong"}])
     assert_response resp, fn(response) ->
       args = JSX.decode!(response.body)["args"]
       assert args["foo"] == ["first", "second"]
@@ -50,17 +51,22 @@ defmodule HTTPillTest do
       |> fixture_path()
       |> File.read()
 
-    assert_response HTTPill.post("localhost:8080/post", file)
+    assert_response HTTPill.post("localhost:8080/post", body: file)
   end
 
   test "post form data" do
-    assert_response HTTPill.post("localhost:8080/post", {:form, [key: "value"]}, %{"Content-type" => "application/x-www-form-urlencoded"}), fn(response) ->
-      Regex.match?(~r/"key".*"value"/, response.body)
-    end
+    assert_response HTTPill.post("localhost:8080/post",
+                                 body: {:form, [key: "value"]},
+                                 headers: %{
+                                   "Content-type" => "application/x-www-form-urlencoded"
+                                 }),
+                    fn(response) ->
+                      Regex.match?(~r/"key".*"value"/, response.body)
+                    end
   end
 
   test "put" do
-    assert_response HTTPill.put("localhost:8080/put", "test")
+    assert_response HTTPill.put("localhost:8080/put", body: "test")
   end
 
   test "put without body" do
@@ -68,7 +74,7 @@ defmodule HTTPillTest do
   end
 
   test "patch" do
-    assert_response HTTPill.patch("localhost:8080/patch", "test")
+    assert_response HTTPill.patch("localhost:8080/patch", body: "test")
   end
 
   test "delete" do
@@ -83,16 +89,21 @@ defmodule HTTPillTest do
   end
 
   test "option follow redirect absolute url" do
-    assert_response HTTPill.get("http://localhost:8080/redirect-to?url=http%3A%2F%2Flocalhost:8080%2Fget", [], [follow_redirect: true])
+    assert_response HTTPill.get(
+      "http://localhost:8080/redirect-to?url=http%3A%2F%2Flocalhost:8080%2Fget",
+      follow_redirect: true
+    )
   end
 
   test "option follow redirect relative url" do
-    assert_response HTTPill.get("http://localhost:8080/relative-redirect/1", [], [follow_redirect: true])
+    assert_response HTTPill.get("http://localhost:8080/relative-redirect/1",
+                                follow_redirect: true)
   end
 
   test "basic_auth hackney option" do
     hackney = [basic_auth: {"user", "pass"}]
-    assert_response HTTPill.get("http://localhost:8080/basic-auth/user/pass", [], [ hackney: hackney ])
+    assert_response HTTPill.get("http://localhost:8080/basic-auth/user/pass",
+                                hackney: hackney)
   end
 
   test "explicit http scheme" do
@@ -105,7 +116,12 @@ defmodule HTTPillTest do
     cert_file = "#{httparrot_priv_dir}/ssl/server.crt"
     key_file =  "#{httparrot_priv_dir}/ssl/server.key"
 
-    assert_response HTTPill.get("https://localhost:8433/get", [], ssl: [cacertfile: cacert_file, keyfile: key_file, certfile: cert_file])
+    assert_response HTTPill.get("https://localhost:8433/get",
+                                ssl: [
+                                  cacertfile: cacert_file,
+                                  keyfile: key_file,
+                                  certfile: cert_file
+                                ])
   end
 
   test "http+unix scheme" do
@@ -124,18 +140,20 @@ defmodule HTTPillTest do
   end
 
   test "request headers as a map" do
-    map_header = %{"X-Header" => "X-Value"}
-    assert HTTPill.get!("localhost:8080/get", map_header).body =~ "X-Value"
+    assert HTTPill.get!("localhost:8080/get",
+                        headers: %{"X-Header" => "X-Value"}).body =~
+      "X-Value"
   end
 
   test "cached request" do
     if_modified = %{"If-Modified-Since" => "Tue, 11 Dec 2012 10:10:24 GMT"}
-    response = HTTPill.get!("localhost:8080/cache", if_modified)
+    response = HTTPill.get!("localhost:8080/cache", headers: if_modified)
     assert %HTTPill.Response{status_code: 304, body: ""} = response
   end
 
   test "send cookies" do
-    response = HTTPill.get!("localhost:8080/cookies", %{}, hackney: [cookie: ["foo=1; bar=2"]])
+    response = HTTPill.get!("localhost:8080/cookies",
+                            hackney: [cookie: ["foo=1; bar=2"]])
     assert response.body |> String.replace( ~r/\s|\r?\n/, "") |> String.replace(~r/\"/, "'") |> JSX.decode! == %{"cookies" => %{"foo" => "1", "bar" => "2"}}
   end
 
@@ -154,7 +172,8 @@ defmodule HTTPillTest do
   end
 
   test "asynchronous request" do
-    {:ok, %HTTPill.AsyncResponse{id: id}} = HTTPill.get "localhost:8080/get", [], [stream_to: self()]
+    {:ok, %HTTPill.AsyncResponse{id: id}} =
+      HTTPill.get "localhost:8080/get", stream_to: self()
 
     assert_receive %HTTPill.AsyncStatus{ id: ^id, code: 200 }, 1_000
     assert_receive %HTTPill.AsyncHeaders{ id: ^id, headers: headers }, 1_000
@@ -164,7 +183,8 @@ defmodule HTTPillTest do
   end
 
   test "asynchronous request with explicit streaming using [async: :once]" do
-    {:ok, resp = %HTTPill.AsyncResponse{id: id}} = HTTPill.get "localhost:8080/get", [], [stream_to: self(), async: :once]
+    {:ok, resp = %HTTPill.AsyncResponse{id: id}} =
+      HTTPill.get "localhost:8080/get", stream_to: self(), async: :once
 
     assert_receive %HTTPill.AsyncStatus{ id: ^id, code: 200 }, 100
 
@@ -184,7 +204,10 @@ defmodule HTTPillTest do
   end
 
   test "asynchronous redirected get request" do
-    {:ok, %HTTPill.AsyncResponse{id: id}} = HTTPill.get "localhost:8080/redirect/2", [], [stream_to: self(), hackney: [follow_redirect: true]]
+    {:ok, %HTTPill.AsyncResponse{id: id}} =
+      HTTPill.get("localhost:8080/redirect/2",
+                  stream_to: self(),
+                  hackney: [follow_redirect: true])
 
     assert_receive %HTTPill.AsyncRedirect{ id: ^id, to: to, headers: headers }, 1_000
     assert to == "http://localhost:8080/redirect/1"
@@ -192,7 +215,11 @@ defmodule HTTPillTest do
   end
 
   test "multipart upload" do
-    response = HTTPill.post("localhost:8080/post", {:multipart, [{:file, "test/test_helper.exs"}, {"name", "value"}]})
+    response = HTTPill.post("localhost:8080/post",
+                            body: {
+                              :multipart,
+                              [{:file, "test/test_helper.exs"}, {"name", "value"}]
+                            })
     assert_response(response)
   end
 
@@ -200,7 +227,9 @@ defmodule HTTPillTest do
     expected = %{"some" => "bytes"}
     enumerable = JSX.encode!(expected) |> String.split("")
     headers = %{"Content-type" => "application/json"}
-    response = HTTPill.post("localhost:8080/post", {:stream, enumerable}, headers)
+    response = HTTPill.post("localhost:8080/post",
+                            body: {:stream, enumerable},
+                            headers: headers)
     assert_response response
     {:ok, %HTTPill.Response{body: body}} = response
 
