@@ -92,6 +92,8 @@ defmodule HTTPill.Base do
   alias HTTPill.Request
   alias HTTPill.Response
 
+  require Logger
+
   @type headers :: [{binary, binary}] | %{binary => binary}
   @type body :: binary | {:form, [{atom, any}]} | {:file, binary}
 
@@ -489,7 +491,14 @@ defmodule HTTPill.Base do
   def request(module, request, process_status_code, process_headers, process_body) do
     hn_options = build_hackney_options(module, request.options)
 
-    case do_request(request, hn_options) do
+    Logger.debug(["HTTP request started - ",
+                  "module ", inspect(module), " - ",
+                  "method ", inspect(request.method), ?\s,
+                  request.url])
+    Logger.debug(["HTTP request body: ", inspect(request.body)])
+    start = :os.system_time(:milli_seconds)
+
+    result = case do_request(request, hn_options) do
       {:ok, status_code, headers} ->
         response(process_status_code, process_headers, process_body, status_code, headers, "", request.url)
       {:ok, status_code, headers, client} ->
@@ -500,6 +509,15 @@ defmodule HTTPill.Base do
       {:ok, id} -> { :ok, %HTTPill.AsyncResponse{ id: id } }
       {:error, reason} -> {:error, %ConnError{reason: reason}}
     end
+
+    duration = :os.system_time(:milli_seconds) - start
+    Logger.debug(["HTTP request ended - ",
+                  "module ", inspect(module), " - ",
+                  "method ", inspect(request.method), ?\s,
+                  request.url, ?\s,
+                  "time=", inspect(duration), "ms"])
+
+    result
   end
 
   defp do_request(%Request{body: {:stream, enumerable}} = request, hn_options) do

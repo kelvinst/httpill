@@ -1,22 +1,20 @@
 defmodule HTTPill.Request do
-  defstruct [:body, :method, :params, :started_at, :url, options: [], headers: []]
+  defstruct [:body, :method, :params, :url, options: [], headers: []]
   @type t :: %__MODULE__{
     body: term,
     headers: list,
     method: atom,
     options: list,
-    params: map,
-    started_at: integer,
+    params: term,
     url: binary
   }
 end
 
 defmodule HTTPill.Response do
-  defstruct [:body, :received_at, :request_url, :status_code, headers: []]
+  defstruct [:body, :request_url, :status_code, headers: []]
   @type t :: %__MODULE__{
     body: term,
     headers: list,
-    received_at: integer,
     request_url: binary,
     status_code: integer
   }
