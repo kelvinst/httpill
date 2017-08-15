@@ -61,12 +61,13 @@ defmodule HTTPill.Base do
   alias HTTPill.AsyncRedirect
   alias HTTPill.AsyncEnd
   alias HTTPill.ConnError
+  alias HTTPill.Config
   alias HTTPill.Request
   alias HTTPill.Response
 
   require Logger
 
-  defmacro __using__(_) do
+  defmacro __using__(opts) do
     quote do
       @type any_async_response ::
         AsyncResponse.t |
@@ -75,6 +76,12 @@ defmodule HTTPill.Base do
         AsyncChunk.t |
         AsyncRedirect.t |
         AsyncEnd.t
+
+      @doc """
+      Returns the configuration for this module.
+      """
+      @spec config() :: Config.t
+      def config, do: HTTPill.Base.config(__MODULE__, unquote(opts))
 
       @doc """
       Starts HTTPill and its dependencies.
@@ -129,7 +136,8 @@ defmodule HTTPill.Base do
                               url,
                               options,
                               &before_process_request/1,
-                              &after_process_request/1)
+                              &after_process_request/1,
+                              config())
         HTTPill.Base.request(__MODULE__,
                              request,
                              &before_process_response/1,
@@ -324,6 +332,12 @@ defmodule HTTPill.Base do
 
       defoverridable Module.definitions_in(__MODULE__)
     end
+  end
+
+  @doc false
+  def config(module, opts) do
+    struct(Config,
+           Keyword.merge(opts, Application.get_env(:httpill, module, [])))
   end
 
   @doc false

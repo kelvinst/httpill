@@ -9,6 +9,7 @@ defmodule HTTPill.Request do
 
   defstruct [:method, :params, :url, body: "", options: [], headers: []]
 
+  alias HTTPill.Config
   alias HTTPill.HeaderList
   alias HTTPill.Request
 
@@ -62,8 +63,8 @@ defmodule HTTPill.Request do
 
   Timeouts can be an integer or `:infinity`
   """
-  @spec new(atom, binary, Keyword.t, function, function) :: t
-  def new(method, url, options, before_process, after_process) do
+  @spec new(atom, binary, Keyword.t, function, function, Config.t) :: t
+  def new(method, url, options, before_process, after_process, config) do
     Request
     |> struct([
       {:method, method},
@@ -72,16 +73,18 @@ defmodule HTTPill.Request do
       options
     ])
     |> before_process.()
-    |> handle_url()
+    |> handle_url(config)
     |> handle_headers()
     |> handle_body()
     |> after_process.()
   end
 
-  defp handle_url(%Request{} = request) do
+  defp handle_url(%Request{} = request, %Config{base_url: base}) do
     url =
       request
       |> get_url_with_params()
+      |> to_string()
+      |> concat_base_url(base)
       |> concat_url_protocol()
     %{request | url: url}
   end
@@ -97,17 +100,18 @@ defmodule HTTPill.Request do
     end
   end
 
-  defp concat_url_protocol(url) do
-    string_url = to_string(url)
+  defp concat_base_url(url, nil), do: url
+  defp concat_base_url(url, base), do: "#{base}/#{url}"
 
-    string_url
+  defp concat_url_protocol(url) do
+    url
     |> String.slice(0, 12)
     |> String.downcase
     |> case do
-      "http://" <> _ -> string_url
-      "https://" <> _ -> string_url
-      "http+unix://" <> _ -> string_url
-      _ -> "http://" <> string_url
+      "http://" <> _ -> url
+      "https://" <> _ -> url
+      "http+unix://" <> _ -> url
+      _ -> "http://" <> url
     end
   end
 

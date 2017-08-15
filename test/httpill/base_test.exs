@@ -38,6 +38,16 @@ defmodule HTTPillBaseTest do
     end
   end
 
+  defmodule ConfigPill do
+    use HTTPill.Base
+
+    Application.put_env(:httpill, __MODULE__, base_url: "config")
+  end
+
+  defmodule OptPill do
+    use HTTPill.Base, base_url: "opt"
+  end
+
   setup do
     new :hackney
     on_exit fn -> unload() end
@@ -218,19 +228,8 @@ defmodule HTTPillBaseTest do
   end
 
   test "receiveing a map for Accepts application/json" do
-    expect(:hackney,
-           :request,
-           [{
-             [
-               :post,
-               "http://localhost",
-               [
-                 {"Content-Type", "application/json; charset=UTF-8"},
-                 {"Accepts", "application/json; charset=UTF-8"}
-               ],
-               "{\"a\":1}",
-               []
-             ],
+    expect(:hackney, :request, [{
+             [:post, "http://localhost", [{"Content-Type", "application/json; charset=UTF-8"}, {"Accepts", "application/json; charset=UTF-8"}], "{\"a\":1}", []],
              {:ok, 200, [], :client}
            }])
     expect(:hackney, :body, 1, {:ok, "{\"a\":1}"})
@@ -245,5 +244,33 @@ defmodule HTTPillBaseTest do
                       body: %{a: 1})
 
     assert validate :hackney
+  end
+
+  test "request with base_url as a config" do
+    expect(:hackney, :request, [{
+             [:get, "http://config/this", [], "", []],
+             {:ok, 200, [], :client}
+           }])
+    expect(:hackney, :body, 1, {:ok, "body"})
+
+    assert %HTTPill.Response{
+      status_code: 200,
+      body: "body",
+      request: %{url: "http://config/this"}
+    } = ConfigPill.get!("this")
+  end
+
+  test "request with base_url as an option" do
+    expect(:hackney, :request, [{
+             [:get, "http://opt/this", [], "", []],
+             {:ok, 200, [], :client}
+           }])
+    expect(:hackney, :body, 1, {:ok, "body"})
+
+    assert %HTTPill.Response{
+      status_code: 200,
+      body: "body",
+      request: %{url: "http://opt/this"}
+    } = OptPill.get!("this")
   end
 end

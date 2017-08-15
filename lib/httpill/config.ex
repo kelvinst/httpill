@@ -24,8 +24,8 @@ defmodule HTTPill.Config do
   """
 
   defstruct [
+    :base_url,
     adapter: :hackney,
-    base_url: "",
     request_headers: [],
     response_handling_method: :conn_error
   ]
