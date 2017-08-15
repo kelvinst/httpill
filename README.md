@@ -2,6 +2,9 @@
 
 HTTP requests for sick people!
 
+For more information about it, check our
+[online docs](https://hexdocs.pm/httpill).
+
 ## Installation
 
 The package can be installed by adding `httpill` to your list of dependencies
@@ -14,8 +17,4 @@ def deps do
   ]
 end
 ```
-
-## Usage
-
-Check our [online docs](https://hexdocs.pm/httpill)!.
 
