@@ -43,12 +43,14 @@ defmodule HTTPillBaseTest do
 
     Application.put_env(:httpill,
                         __MODULE__,
+                        response_handling_method: :status_error,
                         base_url: "config",
                         request_headers: [{"Header", "env"}])
   end
 
   defmodule OptPill do
     use HTTPill.Base,
+      response_handling_method: :no_tuple,
       base_url: "opt",
       request_headers: [{"Header", "opt"}]
   end
@@ -254,15 +256,15 @@ defmodule HTTPillBaseTest do
   test "request with config as env" do
     expect(:hackney, :request, [{
              [:get, "http://config/this", [{"Header", "env"}], "", []],
-             {:ok, 200, [], :client}
+             {:ok, 400, [], :client}
            }])
     expect(:hackney, :body, 1, {:ok, "body"})
 
-    assert %HTTPill.Response{
-      status_code: 200,
+    assert {:status_error, %HTTPill.Response{
+      status_code: 400,
       body: "body",
       request: %{url: "http://config/this"}
-    } = ConfigPill.get!("this")
+    }} = ConfigPill.get("this")
   end
 
   test "request with config as option" do
@@ -276,6 +278,6 @@ defmodule HTTPillBaseTest do
       status_code: 200,
       body: "body",
       request: %{url: "http://opt/this"}
-    } = OptPill.get!("this")
+    } = OptPill.get("this")
   end
 end

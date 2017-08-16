@@ -1,6 +1,27 @@
 defmodule HTTPill.AsyncResponse do
+  @moduledoc """
+  Represents a response for an asyncronous HTTP request
+  """
+
+  alias HTTPill.AsyncResponse
+  alias HTTPill.Config
+
   defstruct id: nil
-  @type t :: %__MODULE__{id: reference}
+
+  @type t :: %AsyncResponse{id: reference}
+
+  @doc """
+  Returns a brand new `AsyncResponse` correctly built for responding requests
+  """
+  @spec new(reference, Config.t) :: t
+  def new(id, config) do
+    struct = %HTTPill.AsyncResponse{id: id}
+    case config.response_handling_method do
+      :no_tuple -> struct
+      _ -> {:ok, struct}
+    end
+
+  end
 end
 
 defmodule HTTPill.AsyncStatus do

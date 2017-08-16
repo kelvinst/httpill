@@ -9,6 +9,7 @@ defmodule HTTPill.Response do
 
   defstruct [:body, :request, :status_code, headers: []]
 
+  alias HTTPill.Config
   alias HTTPill.HeaderList
   alias HTTPill.Request
   alias HTTPill.Response
@@ -24,8 +25,8 @@ defmodule HTTPill.Response do
   Creates a brand new response, correctly handling body parsing and other
   things, making it ready to be worked on.
   """
-  @spec new(Request.t, integer, HeaderList.t, binary, function, function) :: Response.t
-  def new(request, status_code, headers, body, before_process, after_process) do
+  @spec new(Request.t, integer, HeaderList.t, binary, Config.t, function, function) :: Response.t
+  def new(request, status_code, headers, body, config, before_process, after_process) do
     response =
       %Response{
         status_code: status_code,
@@ -37,7 +38,16 @@ defmodule HTTPill.Response do
       |> decode_response_body(HeaderList.get(request.headers, "Accepts"))
       |> after_process.()
 
-    {:ok, response}
+    case config.response_handling_method do
+      :no_tuple -> response
+      :conn_error -> {:ok, response}
+      :status_error ->
+        if response.status_code >= 400 do
+          {:status_error, response}
+        else
+          {:ok, response}
+        end
+    end
   end
 
   defp decode_response_body(resp, nil) do

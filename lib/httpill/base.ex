@@ -60,10 +60,11 @@ defmodule HTTPill.Base do
   alias HTTPill.AsyncChunk
   alias HTTPill.AsyncRedirect
   alias HTTPill.AsyncEnd
-  alias HTTPill.ConnError
   alias HTTPill.Config
+  alias HTTPill.ConnError
   alias HTTPill.Request
   alias HTTPill.Response
+  alias HTTPill.StatusError
 
   require Logger
 
@@ -140,6 +141,7 @@ defmodule HTTPill.Base do
                               &after_process_request/1)
         HTTPill.Base.request(__MODULE__,
                              request,
+                             config(),
                              &before_process_response/1,
                              &after_process_response/1)
       end
@@ -157,7 +159,11 @@ defmodule HTTPill.Base do
         case request(method, url, options) do
           {:ok, response} ->
             response
+          {:status_error, response} ->
+            raise StatusError, response: response
           {:error, %ConnError{reason: reason}} ->
+            raise ConnError, reason: reason
+          %ConnError{reason: reason} ->
             raise ConnError, reason: reason
         end
       end
@@ -398,7 +404,7 @@ defmodule HTTPill.Base do
   end
 
   @doc false
-  def request(module, request, before_process, after_process) do
+  def request(module, request, config, before_process, after_process) do
     hn_options = build_hackney_options(module, request.options)
 
     Logger.debug(["HTTP request started - ",
@@ -410,16 +416,16 @@ defmodule HTTPill.Base do
 
     result = case do_request(request, hn_options) do
       {:ok, status_code, headers} ->
-        Response.new(request, status_code, headers, "", before_process, after_process)
+        Response.new(request, status_code, headers, "", config, before_process, after_process)
       {:ok, status_code, headers, client} ->
         case :hackney.body(client) do
           {:ok, body} ->
-            Response.new(request, status_code, headers, body, before_process, after_process)
+            Response.new(request, status_code, headers, body, config, before_process, after_process)
           {:error, reason} ->
-            {:error, %ConnError{reason: reason} }
+            ConnError.new(reason, nil, config)
         end
-      {:ok, id} -> { :ok, %HTTPill.AsyncResponse{ id: id } }
-      {:error, reason} -> {:error, %ConnError{reason: reason}}
+      {:ok, id} -> AsyncResponse.new(id, config)
+      {:error, reason} -> ConnError.new(reason, nil, config)
     end
 
     duration = :os.system_time(:milli_seconds) - start
