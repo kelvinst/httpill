@@ -14,7 +14,6 @@ defmodule HTTPill do
   Here's what we wanted:
 
   - Debug logging
-  - Return a `Stream` for async chunked responses handling
   - Less callbacks to override, just one for requests and one for responses
   - Auto JSON encoding/decoding for the request/response body according to
   `Content-Type` and `Accepts`

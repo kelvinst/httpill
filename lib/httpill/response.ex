@@ -20,12 +20,16 @@ defmodule HTTPill.Response do
     request: HTTPill.Request.t,
     status_code: integer
   }
+  @type result ::
+    {:ok, Response.t | AsyncResponse.t} |
+    {:status_error, Response.t}
 
   @doc """
   Creates a brand new response, correctly handling body parsing and other
   things, making it ready to be worked on.
   """
-  @spec new(Request.t, integer, HeaderList.t, binary, Config.t, function, function) :: Response.t
+  @spec new(Request.t, integer, HeaderList.t, binary, Config.t, function, function) ::
+    Response.result
   def new(request, status_code, headers, body, config, before_process, after_process) do
     response =
       %Response{

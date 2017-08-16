@@ -34,24 +34,33 @@ defmodule HTTPill.Base do
   It will make a request to GitHub and return a body with the keys converted to
   atoms. But be careful with that, since atoms are a limited resource.
 
+  ## Configuring
+
+  You can configure your `HTTPill.Base` modules passing the opts when you're
+  using it, like this:
+
+      defmodule Google do
+        use HTTPill.Base, base_url: "https://api.google.com"
+      end
+
+  Or even on your whole env, by setting this on your config files:
+
+      config :httpill, Google, base_url: "https://api.google.com"
+
   ## Overriding functions
 
-  `HTTPill.Base` defines the following list of functions, all of which can be
-  overridden (by redefining them). The following list also shows the typespecs
-  for these functions and a short description.
+  `HTTPill.Base` defines a lot of functions, all of which can be overridden (by
+  redefining them). The following list are the ones made specifically to be
+  overridden:
 
-      # Called before and after processing the request info for any request
-      def before_process_request(request)
-      def after_process_request(request)
+  - `before_process_request/1`
+  - `after_process_request/1`
+  - `before_process_response/1`
+  - `after_process_response/1`
+  - `process_any_async_response/1`
 
-      # Called before and after processing the response info for any request
-      def before_process_response(response)
-      def after_process_response(response)
-
-      # Called before and after the response for any async requests
-      def before_process_any_async_response(response)
-      def after_process_any_async_response(response)
-
+  The names suggest what they stand for, but you can find more info on the
+  docs.
   """
 
   alias HTTPill.AsyncResponse
@@ -60,6 +69,7 @@ defmodule HTTPill.Base do
   alias HTTPill.AsyncChunk
   alias HTTPill.AsyncRedirect
   alias HTTPill.AsyncEnd
+  alias HTTPill.Base
   alias HTTPill.Config
   alias HTTPill.ConnError
   alias HTTPill.Request
@@ -68,46 +78,60 @@ defmodule HTTPill.Base do
 
   require Logger
 
+  @type request_result ::
+    Response.result |
+    {:error, ConnError.t} |
+    Response.t |
+    ConnError.t
+
   defmacro __using__(opts) do
     quote do
-      @type any_async_response ::
-        AsyncResponse.t |
-        AsyncStatus.t |
-        AsyncHeaders.t |
-        AsyncChunk.t |
-        AsyncRedirect.t |
-        AsyncEnd.t
-
       @doc """
       Returns the configuration for this module.
       """
       @spec config() :: Config.t
-      def config, do: HTTPill.Base.config(__MODULE__, unquote(opts))
+      def config, do: Base.config(__MODULE__, unquote(opts))
 
       @doc """
       Starts HTTPill and its dependencies.
       """
       def start, do: :application.ensure_all_started(:httpill)
 
+      @doc """
+      Called before processing any request
+      """
       @spec before_process_request(Request.t) :: Request.t
       def before_process_request(request), do: request
 
+      @doc """
+      Called after processing any request
+      """
       @spec after_process_request(Request.t) :: Request.t
       def after_process_request(request), do: request
 
+      @doc """
+      Called before processing any response
+      """
       @spec before_process_response(Response.t) :: Response.t
       def before_process_response(response), do: response
 
+      @doc """
+      Called after processing any response
+      """
       @spec after_process_response(Response.t) :: Response.t
       def after_process_response(response), do: response
 
-      @spec process_any_async_response(any_async_response) :: any_async_response
+      @doc """
+      Called after processing any async response
+      """
+      @spec process_any_async_response(AsyncResponse.any_t) ::
+        AsyncResponse.any_t
       def process_any_async_response(response), do: response
 
       @doc false
       @spec transformer(pid) :: :ok
       def transformer(target) do
-        HTTPill.Base.transformer(__MODULE__,
+        Base.transformer(__MODULE__,
                                  target,
                                  &process_any_async_response/1)
       end
@@ -130,8 +154,7 @@ defmodule HTTPill.Base do
                   headers: [{"Accept", "application/json"}])
 
       """
-      @spec request(atom, binary, Keyword.t) ::
-        {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      @spec request(atom, binary, Keyword.t) :: Base.request_result
       def request(method, url, options \\ []) do
         request = Request.new(method,
                               url,
@@ -139,7 +162,7 @@ defmodule HTTPill.Base do
                               config(),
                               &before_process_request/1,
                               &after_process_request/1)
-        HTTPill.Base.request(__MODULE__,
+        Base.request(__MODULE__,
                              request,
                              config(),
                              &before_process_response/1,
@@ -171,19 +194,16 @@ defmodule HTTPill.Base do
       @doc """
       Issues a GET request to the given url.
 
-      Returns `{:ok, response}` if the request is successful, `{:error, reason}`
-      otherwise.
-
       See `request/3` for more detailed information.
       """
-      @spec get(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      @spec get(binary, Keyword.t) ::
+        {:ok, Response.t | AsyncResponse.t} |
+        {:error, ConnError.t}
       def get(url, options \\ []), do: request(:get, url, options)
 
       @doc """
       Issues a GET request to the given url, raising an exception in case of
       failure.
-
-      If the request does not fail, the response is returned.
 
       See `request!/3` for more detailed information.
       """
@@ -193,19 +213,16 @@ defmodule HTTPill.Base do
       @doc """
       Issues a PUT request to the given url.
 
-      Returns `{:ok, response}` if the request is successful, `{:error, reason}`
-      otherwise.
-
       See `request/3` for more detailed information.
       """
-      @spec put(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t } | {:error, ConnError.t}
+      @spec put(binary, Keyword.t) ::
+        {:ok, Response.t | AsyncResponse.t } |
+        {:error, ConnError.t}
       def put(url, options \\ []), do: request(:put, url, options)
 
       @doc """
       Issues a PUT request to the given url, raising an exception in case of
       failure.
-
-      If the request does not fail, the response is returned.
 
       See `request!/3` for more detailed information.
       """
@@ -215,9 +232,6 @@ defmodule HTTPill.Base do
       @doc """
       Issues a HEAD request to the given url.
 
-      Returns `{:ok, response}` if the request is successful, `{:error, reason}`
-      otherwise.
-
       See `request/3` for more detailed information.
       """
       @spec head(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
@@ -226,8 +240,6 @@ defmodule HTTPill.Base do
       @doc """
       Issues a HEAD request to the given url, raising an exception in case of
       failure.
-
-      If the request does not fail, the response is returned.
 
       See `request!/3` for more detailed information.
       """
@@ -249,8 +261,6 @@ defmodule HTTPill.Base do
       Issues a POST request to the given url, raising an exception in case of
       failure.
 
-      If the request does not fail, the response is returned.
-
       See `request!/3` for more detailed information.
       """
       @spec post!(binary, Keyword.t) :: Response.t | AsyncResponse.t
@@ -258,9 +268,6 @@ defmodule HTTPill.Base do
 
       @doc """
       Issues a PATCH request to the given url.
-
-      Returns `{:ok, response}` if the request is successful, `{:error, reason}`
-      otherwise.
 
       See `request/3` for more detailed information.
       """
@@ -271,8 +278,6 @@ defmodule HTTPill.Base do
       Issues a PATCH request to the given url, raising an exception in case of
       failure.
 
-      If the request does not fail, the response is returned.
-
       See `request!/3` for more detailed information.
       """
       @spec patch!(binary, Keyword.t) :: Response.t | AsyncResponse.t
@@ -280,9 +285,6 @@ defmodule HTTPill.Base do
 
       @doc """
       Issues a DELETE request to the given url.
-
-      Returns `{:ok, response}` if the request is successful, `{:error, reason}`
-      otherwise.
 
       See `request/3` for more detailed information.
       """
@@ -293,8 +295,6 @@ defmodule HTTPill.Base do
       Issues a DELETE request to the given url, raising an exception in case of
       failure.
 
-      If the request does not fail, the response is returned.
-
       See `request!/3` for more detailed information.
       """
       @spec delete!(binary, Keyword.t) :: Response.t | AsyncResponse.t
@@ -302,9 +302,6 @@ defmodule HTTPill.Base do
 
       @doc """
       Issues an OPTIONS request to the given url.
-
-      Returns `{:ok, response}` if the request is successful, `{:error, reason}`
-      otherwise.
 
       See `request/3` for more detailed information.
       """
@@ -314,8 +311,6 @@ defmodule HTTPill.Base do
       @doc """
       Issues a OPTIONS request to the given url, raising an exception in case of
       failure.
-
-      If the request does not fail, the response is returned.
 
       See `request!/3` for more detailed information.
       """
@@ -340,13 +335,20 @@ defmodule HTTPill.Base do
     end
   end
 
-  @doc false
-  def config(module, opts) do
+  @doc """
+  Returns the configuration for the given `module`.
+
+  This function merges the env configuration on top of the given
+  `default_config`, which is empty by default.
+  """
+  def config(module, default_config \\ []) do
     struct(Config,
-           Keyword.merge(opts, Application.get_env(:httpill, module, [])))
+           Keyword.merge(default_config,
+                         Application.get_env(:httpill, module, [])))
   end
 
-  @doc false
+  @doc """
+  """
   def transformer(module, target, process) do
     receive do
       {:hackney_response, id, {:status, code, _reason}} ->

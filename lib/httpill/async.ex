@@ -4,11 +4,24 @@ defmodule HTTPill.AsyncResponse do
   """
 
   alias HTTPill.AsyncResponse
+  alias HTTPill.AsyncStatus
+  alias HTTPill.AsyncHeaders
+  alias HTTPill.AsyncChunk
+  alias HTTPill.AsyncRedirect
+  alias HTTPill.AsyncEnd
   alias HTTPill.Config
 
   defstruct id: nil
 
   @type t :: %AsyncResponse{id: reference}
+  @type any_t ::
+    AsyncResponse.t |
+    AsyncStatus.t |
+    AsyncHeaders.t |
+    AsyncChunk.t |
+    AsyncRedirect.t |
+    AsyncEnd.t
+
 
   @doc """
   Returns a brand new `AsyncResponse` correctly built for responding requests
@@ -20,7 +33,6 @@ defmodule HTTPill.AsyncResponse do
       :no_tuple -> struct
       _ -> {:ok, struct}
     end
-
   end
 end
 
