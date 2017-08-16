@@ -4,7 +4,7 @@ defmodule HTTPill.Mixfile do
   def project do
     [
       app: :httpill,
-      version: "0.2.1",
+      version: "0.2.2",
       elixir: "~> 1.5",
 
       name: "HTTPill",

@@ -125,7 +125,12 @@ defmodule HTTPill.Adapter.Hackney do
     ConnError.new(reason, nil, config)
   end
 
-  defp handle_async_response(target, before_process, after_process) do
+  @doc """
+  Handles the async response by sending messages to `target`
+
+  Calls `before_process` and `after_process` sending the async response objects
+  """
+  def handle_async_response(target, before_process, after_process) do
     receive do
       {:hackney_response, id, {:status, code, _reason}} ->
         send(target,

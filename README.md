@@ -13,7 +13,7 @@ in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:httpill, "~> 0.2.1"},
+    {:httpill, "~> 0.2.2"},
   ]
 end
 ```
