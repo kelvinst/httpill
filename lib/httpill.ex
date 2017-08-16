@@ -27,22 +27,34 @@ defmodule HTTPill do
     - BONUS: also a standard way to set config options to your `HTTPill.Base`
     extensions
 
+  ## Configuration
+
+  You can configure this module behavior on your own config files like this:
+
+      config :httpill, HTTPill, base_url: "api.github.com"
+
+  For mor information about the config options you have, check the
+  `HTTPill.Config` module docs.
+
   ## Usage
 
   The `HTTPill` module can be used to make HTTP requests like this:
 
-      iex> HTTPill.get!("https://api.github.com")
+      iex> HTTPill.get!("api.github.com")
       %HTTPill.Response{status_code: 200,
                         headers: [{"content-type", "application/json"}],
-                        body: "{...}"}
+                        body: ""
+                        request: %HTTPill.Request{...}}
 
   If you want to create your own `HTTPill` extension, give `HTTPill.Base` a
-  check. This module is nothing more than an empty module with only
-  `use HTTPill.Base`, so you will find more documentation about how to make
-  requests there.
+  check.
   """
 
   use HTTPill.Base
+
+  alias HTTPill.AsyncResponse
+  alias HTTPill.ConnError
+  alias HTTPill.Response
 
   @type response ::
     {:ok, Response.t | AsyncResponse.t} |

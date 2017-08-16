@@ -49,17 +49,10 @@ defmodule HTTPill.Base do
 
   ## Overriding functions
 
-  `HTTPill.Base` defines a lot of functions, all of which can be overridden (by
-  redefining them). The following list are the ones made specifically to be
-  overridden:
+  `HTTPill.Base` defines a behaviour for the function callbacks that you can
+  implement. Just give a check on the callback list.
 
-  - `before_process_request/1`
-  - `after_process_request/1`
-  - `before_process_response/1`
-  - `after_process_response/1`
-
-  The names suggest what they stand for, but you can find more info on the
-  docs.
+  All of this functions are optionally overridable on your extensions.
   """
 
   alias HTTPill.AsyncResponse
@@ -74,6 +67,8 @@ defmodule HTTPill.Base do
     quote do
       require Logger
 
+      @behaviour Base
+
       @doc """
       Returns the configuration for this module.
       """
@@ -85,30 +80,16 @@ defmodule HTTPill.Base do
       """
       def start, do: :application.ensure_all_started(:httpill)
 
-      @doc """
-      Called before processing any request
-      """
-      @spec before_process_request(Request.t) :: Request.t
+      @impl Base
       def before_process_request(request), do: request
 
-      @doc """
-      Called after processing any request
-      """
-      @spec after_process_request(Request.t) :: Request.t
+      @impl Base
       def after_process_request(request), do: request
 
-      @doc """
-      Called before processing any response (async too)
-      """
-      @spec before_process_response(Response.t | AsyncResponse.any_t) ::
-        Response.t | AsyncResponse.any_t
+      @impl Base
       def before_process_response(response), do: response
 
-      @doc """
-      Called after processing any response (async too)
-      """
-      @spec after_process_response(Response.t | AsyncResponse.any_t) ::
-        Response.t | AsyncResponse.any_t
+      @impl Base
       def after_process_response(response), do: response
 
       @doc """
@@ -335,5 +316,34 @@ defmodule HTTPill.Base do
            Keyword.merge(default_config,
                          Application.get_env(:httpill, module, [])))
   end
+
+  @doc """
+  Called before processing any request
+  """
+  @callback before_process_request(Request.t) :: Request.t
+
+  @doc """
+  Called after processing any request
+  """
+  @callback after_process_request(Request.t) :: Request.t
+
+  @doc """
+  Called before processing any response (async too)
+  """
+  @callback before_process_response(Response.t | AsyncResponse.any_t) ::
+    Response.t | AsyncResponse.any_t
+
+  @doc """
+  Called after processing any response (async too)
+  """
+  @callback after_process_response(Response.t | AsyncResponse.any_t) ::
+    Response.t | AsyncResponse.any_t
+
+  @optional_callbacks [
+    before_process_request: 1,
+    after_process_request: 1,
+    before_process_response: 1,
+    after_process_response: 1
+  ]
 end
 

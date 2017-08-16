@@ -6,10 +6,11 @@ defmodule HTTPill.Mixfile do
       app: :httpill,
       version: "0.2.1",
       elixir: "~> 1.5",
-      description: "HTTP requests for sick people!",
+
       name: "HTTPill",
+      description: "HTTP requests for sick people!",
+      docs: [main: "HTTPill"],
       source_url: "https://github.com/kelvinst/httpill",
-      start_permanent: Mix.env == :prod,
 
       package: [
         name: :httpill,
@@ -19,6 +20,7 @@ defmodule HTTPill.Mixfile do
         links: %{"GitHub" => "https://github.com/kelginst/httpill"}
       ],
 
+      start_permanent: Mix.env == :prod,
       deps: deps()
     ]
   end
