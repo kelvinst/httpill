@@ -1,4 +1,6 @@
-# HTTPill
+# HTTPill (deprecated)
+
+Well it looks like what we wanted was [Tesla](https://github.com/teamon/tesla)!
 
 HTTP requests for sick people!
 
