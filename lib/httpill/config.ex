@@ -8,8 +8,8 @@ defmodule HTTPill.Config do
 
   ## Config options
 
-  - `adapter` - the adapter to use, `:hackney` by default, the available
-  options are `:hackney` and `:ibrowse`
+  - `adapter` - the adapter to use, `HTTPill.Adapter.Hackney` by default, the
+  available options are `HTTPill.Adapter.Hackney` and `HTTPill.Adapter.Ibrowse`
   - `base_url` - the url to prepend to all requests, `""` by default
   - `request_headers` - the headers to add to all requests, `[]` by default
   - `response_handling_method` - the way to handle responses, `:conn_error` by
@@ -25,7 +25,7 @@ defmodule HTTPill.Config do
 
   defstruct [
     :base_url,
-    adapter: :hackney,
+    adapter: HTTPill.Adapter.Hackney,
     request_headers: [],
     response_handling_method: :conn_error
   ]

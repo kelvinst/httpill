@@ -57,18 +57,12 @@ defmodule HTTPill.Base do
   - `after_process_request/1`
   - `before_process_response/1`
   - `after_process_response/1`
-  - `process_any_async_response/1`
 
   The names suggest what they stand for, but you can find more info on the
   docs.
   """
 
   alias HTTPill.AsyncResponse
-  alias HTTPill.AsyncStatus
-  alias HTTPill.AsyncHeaders
-  alias HTTPill.AsyncChunk
-  alias HTTPill.AsyncRedirect
-  alias HTTPill.AsyncEnd
   alias HTTPill.Base
   alias HTTPill.Config
   alias HTTPill.ConnError
@@ -76,16 +70,10 @@ defmodule HTTPill.Base do
   alias HTTPill.Response
   alias HTTPill.StatusError
 
-  require Logger
-
-  @type request_result ::
-    Response.result |
-    {:error, ConnError.t} |
-    Response.t |
-    ConnError.t
-
   defmacro __using__(opts) do
     quote do
+      require Logger
+
       @doc """
       Returns the configuration for this module.
       """
@@ -110,31 +98,18 @@ defmodule HTTPill.Base do
       def after_process_request(request), do: request
 
       @doc """
-      Called before processing any response
+      Called before processing any response (async too)
       """
-      @spec before_process_response(Response.t) :: Response.t
+      @spec before_process_response(Response.t | AsyncResponse.any_t) ::
+        Response.t | AsyncResponse.any_t
       def before_process_response(response), do: response
 
       @doc """
-      Called after processing any response
+      Called after processing any response (async too)
       """
-      @spec after_process_response(Response.t) :: Response.t
+      @spec after_process_response(Response.t | AsyncResponse.any_t) ::
+        Response.t | AsyncResponse.any_t
       def after_process_response(response), do: response
-
-      @doc """
-      Called after processing any async response
-      """
-      @spec process_any_async_response(AsyncResponse.any_t) ::
-        AsyncResponse.any_t
-      def process_any_async_response(response), do: response
-
-      @doc false
-      @spec transformer(pid) :: :ok
-      def transformer(target) do
-        Base.transformer(__MODULE__,
-                                 target,
-                                 &process_any_async_response/1)
-      end
 
       @doc """
       Issues an HTTP request with the given method to the given url.
@@ -154,19 +129,37 @@ defmodule HTTPill.Base do
                   headers: [{"Accept", "application/json"}])
 
       """
-      @spec request(atom, binary, Keyword.t) :: Base.request_result
+      @spec request(atom, binary, Keyword.t) :: HTTPill.response
       def request(method, url, options \\ []) do
+        cfg = config()
         request = Request.new(method,
                               url,
                               options,
-                              config(),
+                              cfg,
                               &before_process_request/1,
                               &after_process_request/1)
-        Base.request(__MODULE__,
-                             request,
-                             config(),
-                             &before_process_response/1,
-                             &after_process_response/1)
+
+        Logger.debug(["HTTP request started - ",
+                      "module=", inspect(__MODULE__), ?\s,
+                      "adapter=", inspect(cfg.adapter), ?\s,
+                      "method=", inspect(request.method), ?\s,
+                      "url=", inspect(request.url)])
+        start = :os.system_time(:milli_seconds)
+
+        result = cfg.adapter.request(request,
+                                     cfg,
+                                     &before_process_response/1,
+                                     &after_process_response/1)
+
+        duration = :os.system_time(:milli_seconds) - start
+        Logger.debug(["HTTP request ended - ",
+                      "module=", inspect(__MODULE__), ?\s,
+                      "adapter=", inspect(cfg.adapter), ?\s,
+                      "method=", inspect(request.method), ?\s,
+                      "url=", request.url, ?\s,
+                      "time=", inspect(duration), "ms"])
+
+        result
       end
 
       @doc """
@@ -177,7 +170,7 @@ defmodule HTTPill.Base do
       response in case of a successful request, raising an exception in case the
       request fails.
       """
-      @spec request!(atom, binary, Keyword.t) :: Response.t
+      @spec request!(atom, binary, Keyword.t) :: Response.t | AsyncResponse.t
       def request!(method, url, options \\ []) do
         case request(method, url, options) do
           {:ok, response} ->
@@ -196,9 +189,7 @@ defmodule HTTPill.Base do
 
       See `request/3` for more detailed information.
       """
-      @spec get(binary, Keyword.t) ::
-        {:ok, Response.t | AsyncResponse.t} |
-        {:error, ConnError.t}
+      @spec get(binary, Keyword.t) :: HTTPill.response
       def get(url, options \\ []), do: request(:get, url, options)
 
       @doc """
@@ -215,9 +206,7 @@ defmodule HTTPill.Base do
 
       See `request/3` for more detailed information.
       """
-      @spec put(binary, Keyword.t) ::
-        {:ok, Response.t | AsyncResponse.t } |
-        {:error, ConnError.t}
+      @spec put(binary, Keyword.t) :: HTTPill.response
       def put(url, options \\ []), do: request(:put, url, options)
 
       @doc """
@@ -234,7 +223,7 @@ defmodule HTTPill.Base do
 
       See `request/3` for more detailed information.
       """
-      @spec head(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      @spec head(binary, Keyword.t) :: HTTPill.response
       def head(url, options \\ []), do: request(:head, url, options)
 
       @doc """
@@ -254,7 +243,7 @@ defmodule HTTPill.Base do
 
       See `request/3` for more detailed information.
       """
-      @spec post(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      @spec post(binary, Keyword.t) :: HTTPill.response
       def post(url, options \\ []), do: request(:post, url, options)
 
       @doc """
@@ -271,7 +260,7 @@ defmodule HTTPill.Base do
 
       See `request/3` for more detailed information.
       """
-      @spec patch(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      @spec patch(binary, Keyword.t) :: HTTPill.response
       def patch(url, options \\ []), do: request(:patch, url, options)
 
       @doc """
@@ -288,7 +277,7 @@ defmodule HTTPill.Base do
 
       See `request/3` for more detailed information.
       """
-      @spec delete(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      @spec delete(binary, Keyword.t) :: HTTPill.response
       def delete(url, options \\ []), do: request(:delete, url, options)
 
       @doc """
@@ -305,7 +294,7 @@ defmodule HTTPill.Base do
 
       See `request/3` for more detailed information.
       """
-      @spec options(binary, Keyword.t) :: {:ok, Response.t | AsyncResponse.t} | {:error, ConnError.t}
+      @spec options(binary, Keyword.t) :: HTTPill.response
       def options(url, options \\ []), do: request(:options, url, options)
 
       @doc """
@@ -320,10 +309,10 @@ defmodule HTTPill.Base do
       @doc """
       Requests the next message to be streamed for a given
       `HTTPill.AsyncResponse`.
-
-      See `request!/3` for more detailed information.
       """
-      @spec stream_next(AsyncResponse.t) :: {:ok, AsyncResponse.t} | {:error, ConnError.t}
+      @spec stream_next(AsyncResponse.t) ::
+        {:ok, AsyncResponse.t} |
+        {:error, ConnError.t}
       def stream_next(resp = %AsyncResponse{ id: id }) do
         case :hackney.stream_next(id) do
           :ok -> {:ok, resp}
@@ -345,128 +334,6 @@ defmodule HTTPill.Base do
     struct(Config,
            Keyword.merge(default_config,
                          Application.get_env(:httpill, module, [])))
-  end
-
-  @doc """
-  """
-  def transformer(module, target, process) do
-    receive do
-      {:hackney_response, id, {:status, code, _reason}} ->
-        send target, process.(%AsyncStatus{id: id, code: code})
-        transformer(module, target, process)
-      {:hackney_response, id, {:headers, headers}} ->
-        send target, process.(%AsyncHeaders{id: id, headers: headers})
-        transformer(module, target, process)
-      {:hackney_response, id, :done} ->
-        send target, process.(%AsyncEnd{id: id})
-      {:hackney_response, id, {:error, reason}} ->
-        send target, %ConnError{id: id, reason: reason}
-      {:hackney_response, id, {redirect, to, headers}}
-      when redirect in [:redirect, :see_other] ->
-        send target, process.(%AsyncRedirect{id: id, to: to, headers: headers})
-      {:hackney_response, id, chunk} ->
-        send target, process.(%AsyncChunk{id: id, chunk: chunk})
-        transformer(module, target, process)
-    end
-  end
-
-  defp build_hackney_options(module, options) do
-    timeout = Keyword.get options, :timeout
-    recv_timeout = Keyword.get options, :recv_timeout
-    stream_to = Keyword.get options, :stream_to
-    async = Keyword.get options, :async
-    proxy = Keyword.get options, :proxy
-    proxy_auth = Keyword.get options, :proxy_auth
-    ssl = Keyword.get options, :ssl
-    follow_redirect = Keyword.get options, :follow_redirect
-    max_redirect = Keyword.get options, :max_redirect
-
-    hn_options = Keyword.get options, :hackney, []
-
-    hn_options = if timeout, do: [{:connect_timeout, timeout} | hn_options], else: hn_options
-    hn_options = if recv_timeout, do: [{:recv_timeout, recv_timeout} | hn_options], else: hn_options
-    hn_options = if proxy, do: [{:proxy, proxy} | hn_options], else: hn_options
-    hn_options = if proxy_auth, do: [{:proxy_auth, proxy_auth} | hn_options], else: hn_options
-    hn_options = if ssl, do: [{:ssl_options, ssl} | hn_options], else: hn_options
-    hn_options = if follow_redirect, do: [{:follow_redirect, follow_redirect} | hn_options], else: hn_options
-    hn_options = if max_redirect, do: [{:max_redirect, max_redirect} | hn_options], else: hn_options
-
-    hn_options =
-      if stream_to do
-        async_option = case async do
-          nil   -> :async
-          :once -> {:async, :once}
-        end
-        [async_option, {:stream_to, spawn_link(module, :transformer, [stream_to])} | hn_options]
-      else
-        hn_options
-      end
-
-    hn_options
-  end
-
-  @doc false
-  def request(module, request, config, before_process, after_process) do
-    hn_options = build_hackney_options(module, request.options)
-
-    Logger.debug(["HTTP request started - ",
-                  "module ", inspect(module), " - ",
-                  "method ", inspect(request.method), ?\s,
-                  request.url])
-    Logger.debug(["HTTP request body: ", inspect(request.body)])
-    start = :os.system_time(:milli_seconds)
-
-    result = case do_request(request, hn_options) do
-      {:ok, status_code, headers} ->
-        Response.new(request, status_code, headers, "", config, before_process, after_process)
-      {:ok, status_code, headers, client} ->
-        case :hackney.body(client) do
-          {:ok, body} ->
-            Response.new(request, status_code, headers, body, config, before_process, after_process)
-          {:error, reason} ->
-            ConnError.new(reason, nil, config)
-        end
-      {:ok, id} -> AsyncResponse.new(id, config)
-      {:error, reason} -> ConnError.new(reason, nil, config)
-    end
-
-    duration = :os.system_time(:milli_seconds) - start
-    Logger.debug(["HTTP request ended - ",
-                  "module ", inspect(module), " - ",
-                  "method ", inspect(request.method), ?\s,
-                  request.url, ?\s,
-                  "time=", inspect(duration), "ms"])
-
-    result
-  end
-
-  defp do_request(%Request{body: {:stream, enumerable}} = request, hn_options) do
-    with {:ok, ref} <- :hackney.request(request.method,
-                                        request.url,
-                                        request.headers,
-                                        :stream,
-                                        hn_options) do
-      failures = Stream.transform(enumerable, :ok, fn
-        _, :error -> {:halt, :error}
-        bin, :ok  -> {[], :hackney.send_body(ref, bin)}
-        _, error  -> {[error], :error}
-      end) |> Enum.into([])
-
-      case failures do
-        [] ->
-          :hackney.start_response(ref)
-        [failure] ->
-          failure
-      end
-    end
-  end
-
-  defp do_request(request, hn_options) do
-    :hackney.request(request.method,
-                     request.url,
-                     request.headers,
-                     request.body,
-                     hn_options)
   end
 end
 

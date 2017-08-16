@@ -16,30 +16,24 @@ defmodule HTTPill.Response do
 
   @type t :: %Response{
     body: term,
-    headers: HTTPill.HeaderList.t,
-    request: HTTPill.Request.t,
+    headers: HeaderList.t,
+    request: Request.t,
     status_code: integer
   }
-  @type result ::
-    {:ok, Response.t | AsyncResponse.t} |
-    {:status_error, Response.t}
 
   @doc """
   Creates a brand new response, correctly handling body parsing and other
   things, making it ready to be worked on.
   """
-  @spec new(Request.t, integer, HeaderList.t, binary, Config.t, function, function) ::
-    Response.result
-  def new(request, status_code, headers, body, config, before_process, after_process) do
+  @spec new(list, Config.t, function, function) ::
+    {:ok, Response.t | AsyncResponse.t} |
+    {:status_error, Response.t}
+  def new(args, config, before_process, after_process) do
     response =
-      %Response{
-        status_code: status_code,
-        headers: headers,
-        body: body,
-        request: request
-      }
+      Response
+      |> struct(args)
       |> before_process.()
-      |> decode_response_body(HeaderList.get(request.headers, "Accepts"))
+      |> decode_response_body()
       |> after_process.()
 
     case config.response_handling_method do
@@ -52,6 +46,10 @@ defmodule HTTPill.Response do
           {:ok, response}
         end
     end
+  end
+
+  defp decode_response_body(%Response{request: request} = resp) do
+    decode_response_body(resp, HeaderList.get(request.headers, "Accepts"))
   end
 
   defp decode_response_body(resp, nil) do

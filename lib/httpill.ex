@@ -43,5 +43,13 @@ defmodule HTTPill do
   """
 
   use HTTPill.Base
+
+  @type response ::
+    {:ok, Response.t | AsyncResponse.t} |
+    {:status_error, Response.t} |
+    {:error, ConnError.t} |
+    Response.t |
+    AsyncResponse.t |
+    ConnError.t
 end
 
